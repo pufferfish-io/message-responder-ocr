@@ -83,13 +83,13 @@ func (t *messageResponder) Handle(ctx context.Context, raw []byte) error {
 		t.logger.Error("marshal response error: %v", err)
 		return err
 	}
-
-	t.logger.Debug("sending response: topic=%s bytes=%d", t.kafkaTopic, len(out))
-	if err := t.producer.Send(ctx, t.kafkaTopic, out); err != nil {
+	topic := response.Source + t.kafkaTopic
+	t.logger.Debug("sending response: topic=%s bytes=%d", topic, len(out))
+	if err := t.producer.Send(ctx, topic, out); err != nil {
 		t.logger.Error("producer send error: %v", err)
 		return err
 	}
-	t.logger.Info("response sent: topic=%s", t.kafkaTopic)
+	t.logger.Info("response sent: topic=%s", topic)
 	return nil
 }
 
