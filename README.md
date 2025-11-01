@@ -58,8 +58,8 @@ docker buildx build --no-cache --progress=plain .
 Cuts a release tag and pushes it to remote.
 
 ```
-git tag v0.1.1
-git push origin v0.1.1
+git tag v0.0.1
+git push origin v0.0.1
 ```
 
 ### Manage tags
