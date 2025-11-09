@@ -1,74 +1,40 @@
-# msg-responder-ocr-ocr
+# msg-responder-ocr
 
-## Recreate gRPC
+## Что делает
 
-```
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+1. Подписывается на Kafka-топик запросов и десериализует `OcrRequest` (см. `internal/contract`).
+2. Берёт первый медиа-файл, получает OAuth-токен через `doc2text` и вызывает gRPC `Parse`, передавая URL (S3).
+3. Собирает `NormalizedResponse`, добавляет в начало источника (`source` из запроса) и публикует текст в Kafka-ответный топик.
+4. Ошибки логируются и пользователю отсылается шаблонное сообщение `⚠️…`.
 
-export PATH="$PATH:$(go env GOPATH)/bin"
+## Запуск
 
-protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative internal/proto/ocr/v1/ocr.proto
-```
+1. Задайте необходимые окружения (см. ниже).
+2. Соберите и запустите локально:
+   ```bash
+   go run ./cmd/msg-responder-ocr
+   ```
+3. Или соберите Docker-образ и запустите его с переменными:
+   ```bash
+   docker build -t msg-responder-ocr .
+   docker run --rm -e ... msg-responder-ocr
+   ```
 
-## Command Guide
+## Переменные окружения
 
-### Run with exported .env (one‑liner)
+Каждая переменная обязательна, кроме SASL, если Kafka не требует.
 
-Exports all variables from `.env` into the current shell and runs the service.
+- `DOC3TEXT_ACCESS_TOKEN_URL` — URL провайдера OAuth для `doc2text`.
+- `DOC3TEXT_CLIENT_ID` и `DOC3TEXT_CLIENT_SECRET` — данные клиента `doc2text`.
+- `DOC3TEXT_G_RPC_URL` — адрес gRPC-сервиса распознавания текста.
+- `KAFKA_BOOTSTRAP_SERVERS_VALUE` — список брокеров (`host:port[,host:port]`).
+- `KAFKA_GROUP_ID_MESSAGE_RESPONDER_OCR` — идентификатор consumer group.
+- `KAFKA_TOPIC_NAME_OCR_REQUEST` — входной топик с запросами.
+- `KAFKA_TOPIC_NAME_TG_RESPONSE_PREPARER` — суффикс топика ответа; итоговый топик `source + response`.
+- `KAFKA_CLIENT_ID_MESSAGE_RESPONDER_OCR` — идентификатор Kafka-клиента (продюсер и консьюмер).
+- `KAFKA_SASL_USERNAME` и `KAFKA_SASL_PASSWORD` — по необходимости для SASL/PLAIN.
 
-```
-export $(cat .env | xargs) && go run ./cmd/msg-responder-ocr
-```
+## Примечания
 
-### Run with `source` (safer for complex values)
-
-Loads `.env` preserving quotes and special characters, then runs the service.
-
-```
-set -a && source .env && set +a && go run ./cmd/msg-responder-ocr
-```
-
-### Fetch/clean module deps
-
-Resolves dependencies and prunes unused ones.
-
-```
-go mod tidy
-```
-
-### Verbose build (diagnostics)
-
-Builds the binary with verbose and command tracing. Removes old binary after build to keep the tree clean.
-
-```
-go build -v -x ./cmd/msg-responder-ocr && rm -f msg-responder-ocr
-```
-
-### Docker build (Buildx)
-
-Builds the image with detailed progress logs and without cache.
-
-```
-docker buildx build --no-cache --progress=plain .
-```
-
-### Create and push tag
-
-Cuts a release tag and pushes it to remote.
-
-```
-git tag v0.0.1
-git push origin v0.0.1
-```
-
-### Manage tags
-
-List all tags, delete a tag locally and remotely, verify deletion.
-
-```
-git tag -l
-git tag -d vX.Y.Z
-git push --delete origin vX.Y.Z
-git ls-remote --tags origin | grep 'refs/tags/vX.Y.Z$'
-```
+- `doc2text` должен возвращать текст по `ParseRequest` при получении объекта по URL.
+- Логика сообщений описана в `internal/contract`, сам gRPC-клиент в `internal/processor`.
