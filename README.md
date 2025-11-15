@@ -30,7 +30,7 @@
 - `KAFKA_BOOTSTRAP_SERVERS_VALUE` — список брокеров (`host:port[,host:port]`).
 - `KAFKA_GROUP_ID_MESSAGE_RESPONDER_OCR` — идентификатор consumer group.
 - `KAFKA_TOPIC_NAME_OCR_REQUEST` — входной топик с запросами.
-- `KAFKA_TOPIC_NAME_TG_RESPONSE_PREPARER` — суффикс топика ответа; итоговый топик `source + response`.
+- `KAFKA_TOPIC_NAME_TEMP_RESPONSE_PREPARER` — суффикс топика ответа; итоговый топик `source + response`.
 - `KAFKA_CLIENT_ID_MESSAGE_RESPONDER_OCR` — идентификатор Kafka-клиента (продюсер и консьюмер).
 - `KAFKA_SASL_USERNAME` и `KAFKA_SASL_PASSWORD` — по необходимости для SASL/PLAIN.
 
@@ -38,3 +38,6 @@
 
 - `doc2text` должен возвращать текст по `ParseRequest` при получении объекта по URL.
 - Логика сообщений описана в `internal/contract`, сам gRPC-клиент в `internal/processor`.
+
+
+kubectl exec -n app <pod-name> -- /bin/sh -c 'apk add --no-cache curl >/dev/null 2>&1; grpcurl -help || true; nc -vz doc2text.app.svc.cluster.local 50052'. nc
