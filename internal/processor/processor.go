@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"msg-responder-ocr/internal/contract"
 	"msg-responder-ocr/internal/logger"
@@ -69,12 +70,27 @@ func (t *messageResponder) Handle(ctx context.Context, raw []byte) error {
 		t.logger.Error("empty media array in request")
 		response.Text = errorMsg
 	} else {
-		text, err := processObject(ctx, t.doc2text, requestMessage.Media[0].S3URL, t.auth)
+		mediaURL := requestMessage.Media[0].S3URL
+		t.logger.Info("processing media: doc2text_url=%s token_url=%s media_url=%s", t.doc2text, t.auth.AccessTokenURL, mediaURL)
+		text, err := processObject(ctx, t.doc2text, mediaURL, t.auth)
 		if err != nil {
 			code := gstatus.Code(err).String()
-			t.logger.Error("process object error: code=%s err=%v", code, err)
+			if st, ok := gstatus.FromError(err); ok {
+				var detailStrings []string
+				for _, d := range st.Details() {
+					detailStrings = append(detailStrings, fmt.Sprintf("%T: %v", d, d))
+				}
+				details := "none"
+				if len(detailStrings) > 0 {
+					details = strings.Join(detailStrings, "; ")
+				}
+				t.logger.Error("process object error: code=%s message=%s details=%s doc2text_url=%s media_url=%s err=%v", st.Code().String(), st.Message(), details, t.doc2text, mediaURL, err)
+			} else {
+				t.logger.Error("process object error: code=%s doc2text_url=%s media_url=%s err=%v", code, t.doc2text, mediaURL, err)
+			}
 			response.Text = errorMsg
 		} else {
+			t.logger.Info("doc2text success: doc2text_url=%s media_url=%s text_runes=%d", t.doc2text, mediaURL, len([]rune(text)))
 			response.Text = fmt.Sprintf("🖼️➜📝 Готово!\n\n🔷🔷🔷🔷🔷🔷\n%s\n🔷🔷🔷🔷🔷🔷", text)
 		}
 	}
@@ -115,7 +131,7 @@ func processObject(ctx context.Context, addr, objectKeyOrURL string, auth AuthOp
 
 	conn, err := grpc.NewClient(addr, dialOpts...)
 	if err != nil {
-		return "", fmt.Errorf("grpc dial: %w", err)
+		return "", fmt.Errorf("grpc dial addr=%s: %w", addr, err)
 	}
 	defer conn.Close()
 
@@ -123,7 +139,7 @@ func processObject(ctx context.Context, addr, objectKeyOrURL string, auth AuthOp
 
 	resp, err := client.Process(ctx, &ocrv1.ParseRequest{Objectkey: objectKeyOrURL})
 	if err != nil {
-		return "", fmt.Errorf("rpc Process: %w", err)
+		return "", fmt.Errorf("rpc Process object=%s: %w", objectKeyOrURL, err)
 	}
 	return resp.GetText(), nil
 }
